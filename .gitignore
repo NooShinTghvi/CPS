@@ -1,4 +1,5 @@
 *.pdsbak
 *.user.workspace
 *.xml
+*.hex
 .idea
