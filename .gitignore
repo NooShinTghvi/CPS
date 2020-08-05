@@ -1,2 +1,4 @@
 *.pdsbak
 *.user.workspace
+*.xml
+.idea
