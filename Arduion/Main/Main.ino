@@ -4,15 +4,10 @@
 AltSoftSerial BTserial;
 const byte maxDataLength = 20;
 
-//Photoresistor Board
-char receivedCharsFromPhotoresistorBoard[maxDataLength+1] ;
-boolean newDataFromPhotoresistor = false;
-float rightLight, leftLight;
-
-//Pressure Board
-char receivedCharsFromPressureBoard[maxDataLength+1] ;
-boolean newDataFromPressure = false;
-float rightPressure, leftPressure;
+//Hand Board
+char receivedCharsFromHandBoard[maxDataLength+1] ;
+boolean newDataFromHand = false;
+int rightLight, leftLight, rightPressure, leftPressure;
 
 //State machine
 typedef enum {
@@ -52,23 +47,18 @@ systemState state;
 void setup() {
     Serial.begin(9600);
     BTserial.begin(9600);
-    newDataFromPhotoresistor = false;
-    newDataFromPressure = false;
+    newDataFromHand = false;
     ballInHandState = ZERO_ZERO;
     ballPressureStatus = CHECKED;
     state = fs_1;
 }
 
 void loop() {
-    recvDataFromPhotoresistorBoard();
-    if (newDataFromPhotoresistor) {
-        splitRightLightAndLeftLight();
-        ballInHandState = determinePositionOfBallInHand(rightLight, leftLight);
-    }
-    recvDataFromPressureBoard();
-    if (newDataFromPressure) {
-        splitRightPressureAndLeftPressure();
-        ballPressureStatus = checkThePressureOnHand(rightPressure, leftPressure);
+    recvDataFromHandBoard();
+    if (newDataFromHand) {
+        splitDataReceivedHandBoard();
+        ballInHandState = determinePositionOfBallInHand();
+        ballPressureStatus = checkThePressureOnHand();
     }
 
     switch (state) {  // determine next state
@@ -255,8 +245,8 @@ void loop() {
 
 
 
-//Photoresistor Board
-void recvDataFromPhotoresistorBoard() {
+//Hand Board
+void recvDataFromHandBoard() {
     static boolean recvInProgress = false;
     static byte ndx = 0;
     char startMarker = '<';
@@ -266,81 +256,47 @@ void recvDataFromPhotoresistorBoard() {
         // Serial.print("p_r: "); Serial.println(rc);
         if (recvInProgress == true) {
             if (rc != endMarker){
-                if (ndx < maxDataLength) { receivedCharsFromPhotoresistorBoard[ndx] = rc; ndx++;  }
+                if (ndx < maxDataLength) { receivedCharsFromHandBoard[ndx] = rc; ndx++;  }
             }
             else {
-                receivedCharsFromPhotoresistorBoard[ndx] = '\0'; // terminate the string
+                receivedCharsFromHandBoard[ndx] = '\0'; // terminate the string
                 recvInProgress = false;
                 ndx = 0;
-                newDataFromPhotoresistor = true;
+                newDataFromHand = true;
             }
         }
         else if (rc == startMarker) { recvInProgress = true; }
     }
 }
-void splitRightLightAndLeftLight() {
-    newDataFromPhotoresistor = false;
-    Serial.print("Recieved Data From Photoresistor-Borad: ");  Serial.println(receivedCharsFromPhotoresistorBoard);
-    char* rightLightStr = strtok(receivedCharsFromPhotoresistorBoard, ":");
-    char* leftLightStr = strtok(NULL, ":");
-    rightLight = atof( rightLightStr);
-    leftLight = atof( leftLightStr);
+void splitDataReceivedHandBoard() {
+    newDataFromHand = false;
+    Serial.print("Recieved Data From Hand-Borad: ");  Serial.println(receivedCharsFromHandBoard);
+    char* str1 = strtok(receivedCharsFromHandBoard, ":");
+    char* str2 = strtok(NULL, ":");
+    char* str3 = strtok(NULL, ":");
+    char* str4 = strtok(NULL, ":");
+    rightPressure = atoi(str1);
+    leftPressure = atoi(str2);
+    rightLight = atoi(str3);
+    leftLight = atoi(str4);
+    Serial.print("rightPressure: "); Serial.println(rightPressure);
+    Serial.print("leftPressure: "); Serial.println(leftPressure);
     Serial.print("rightLight: "); Serial.println(rightLight);
     Serial.print("leftLight: "); Serial.println(leftLight);
 }
 
-//Pressure Board
-void recvDataFromPressureBoard() {
-    static boolean recvInProgress = false;
-    static byte ndx = 0;
-    char startMarker = '<';
-    char endMarker = '>';
-    if (Serial.available() > 0) {
-        char rc = Serial.read();
-        // Serial.print("p_r: "); Serial.println(rc);
-        if (recvInProgress == true) {
-            if (rc != endMarker){
-                if (ndx < maxDataLength) { receivedCharsFromPressureBoard[ndx] = rc; ndx++;  }
-            }
-            else {
-                receivedCharsFromPressureBoard[ndx] = '\0'; // terminate the string
-                recvInProgress = false;
-                ndx = 0;
-                newDataFromPressure = true;
-            }
-        }
-        else if (rc == startMarker) { recvInProgress = true; }
-    }
-}
-void splitRightPressureAndLeftPressure() {
-    newDataFromPressure = false;
-    Serial.print("Recieved Data From Pressure-Borad: ");  Serial.println(receivedCharsFromPressureBoard);
-    char* rightPressureStr = strtok(receivedCharsFromPressureBoard, ":");
-    char* leftPressureStr = strtok(NULL, ":");
-    rightPressure = atof( rightPressureStr);
-    leftPressure = atof( leftPressureStr);
-    Serial.print("rightPressure: "); Serial.println(rightPressure);
-    Serial.print("leftPressure: "); Serial.println(leftPressure);
-}
-
-L determinePositionOfBallInHand(float lr, float ll) {
-    float ballInHandValue = 120.0;
-    int r,l;
-    if (lr < ballInHandValue) r = 1;
-    else { r = 0; }
-
-    if (ll < ballInHandValue) l = 1;
-    else { l = 0; }
-
+L determinePositionOfBallInHand() {
+    int r = 1 - rightLight;
+    int l = 1 - leftLight;
+    
     if (!(r || l)) return ZERO_ZERO;
     else if (r ^ l) { return ZERO_ONE; }
     else if (r || l) { return ONE_ZERO; }
     else { return ONE_ONE; }
 }
 
-CHECHING checkThePressureOnHand(float pr, float pl) {
-    float Pd1 = 1000.;
-    float Pd2 = 120.0;
+CHECHING checkThePressureOnHand() {
+    // rightPressure, leftPressure
     //if ((pd1 < pr) && (pr < Pd2) && (pd1 < pl) && (pl < Pd2))
       return CHECKED;
     //else return FAILED;
